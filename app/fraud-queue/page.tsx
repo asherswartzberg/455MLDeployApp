@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+const RAILWAY_URL = "https://mlprojectpipeline-production.up.railway.app";
+
 type FraudRow = {
   order_id: number;
   order_datetime: string;
@@ -53,10 +55,14 @@ export default function FraudQueuePage() {
     setScoreMsg("");
     setScoreSuccess(null);
     try {
-      const res = await fetch("/api/run-scoring", { method: "POST" });
+      const res = await fetch(`${RAILWAY_URL}/score`, { method: "POST" });
       const data = await res.json();
-      setScoreMsg(data.message ?? "Scoring complete.");
       setScoreSuccess(data.success ?? false);
+      if (data.success) {
+        setScoreMsg(`Scoring complete in ${((data.duration_ms ?? 0) / 1000).toFixed(1)}s.`);
+      } else {
+        setScoreMsg(`Scoring failed: ${data.stderr ?? "Unknown error"}`);
+      }
       loadQueue();
     } catch {
       setScoreMsg("Failed to reach scoring API. This can take 60-90 seconds — please try again.");
