@@ -40,18 +40,28 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  const shippingFee = 5.99;
+  const taxAmount = Math.round(orderTotal * 0.08 * 100) / 100;
+  const totalWithExtras = Math.round((orderTotal + shippingFee + taxAmount) * 100) / 100;
+
   const { data: order, error: orderErr } = await supabase
     .from("orders")
     .insert({
       customer_id: Number(customerId),
       order_datetime: new Date().toISOString(),
-      order_total: orderTotal,
-      is_fraud: 0,
-      payment_method: "credit_card",
+      order_subtotal: orderTotal,
+      shipping_fee: shippingFee,
+      tax_amount: taxAmount,
+      order_total: totalWithExtras,
+      shipping_state: "UT",
+      payment_method: "card",
       device_type: "desktop",
       ip_country: "US",
       billing_zip: "00000",
       shipping_zip: "00000",
+      promo_used: 0,
+      is_fraud: 0,
+      fulfilled: 0,
     })
     .select("order_id")
     .single();
