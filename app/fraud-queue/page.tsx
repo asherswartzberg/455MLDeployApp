@@ -15,11 +15,24 @@ type FraudRow = {
   prediction_timestamp: string;
 };
 
+function riskColor(prob: number) {
+  if (prob > 0.7) return "bg-red-50 border-l-4 border-l-red-500";
+  if (prob > 0.4) return "bg-yellow-50 border-l-4 border-l-yellow-500";
+  return "bg-green-50 border-l-4 border-l-green-500";
+}
+
+function riskBadge(prob: number) {
+  if (prob > 0.7) return "bg-red-100 text-red-800";
+  if (prob > 0.4) return "bg-yellow-100 text-yellow-800";
+  return "bg-green-100 text-green-800";
+}
+
 export default function FraudQueuePage() {
   const [rows, setRows] = useState<FraudRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [scoring, setScoring] = useState(false);
   const [scoreMsg, setScoreMsg] = useState("");
+  const [scoreSuccess, setScoreSuccess] = useState<boolean | null>(null);
 
   function loadQueue() {
     setLoading(true);
@@ -38,13 +51,16 @@ export default function FraudQueuePage() {
   async function runScoring() {
     setScoring(true);
     setScoreMsg("");
+    setScoreSuccess(null);
     try {
       const res = await fetch("/api/run-scoring", { method: "POST" });
       const data = await res.json();
       setScoreMsg(data.message ?? "Scoring complete.");
+      setScoreSuccess(data.success ?? false);
       loadQueue();
     } catch {
-      setScoreMsg("Failed to reach scoring API.");
+      setScoreMsg("Failed to reach scoring API. This can take 60-90 seconds — please try again.");
+      setScoreSuccess(false);
     } finally {
       setScoring(false);
     }
@@ -59,24 +75,30 @@ export default function FraudQueuePage() {
           disabled={scoring}
           className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50 text-sm"
         >
-          {scoring ? "Scoring..." : "Run Scoring"}
+          {scoring ? "Scoring (this may take 60s)..." : "Run Scoring"}
         </button>
       </div>
 
       {scoreMsg && (
-        <p className="text-sm mb-3 text-slate-600 bg-slate-100 border border-slate-200 rounded px-3 py-2">
+        <div className={`text-sm mb-3 rounded px-3 py-2 border ${
+          scoreSuccess === true
+            ? "bg-green-50 border-green-200 text-green-800"
+            : scoreSuccess === false
+            ? "bg-red-50 border-red-200 text-red-800"
+            : "bg-slate-100 border-slate-200 text-slate-600"
+        }`}>
           {scoreMsg}
-        </p>
+        </div>
       )}
 
       <p className="text-slate-600 text-sm mb-4">
-        Top 50 orders predicted as fraudulent, sorted by probability (highest first).
+        Top 50 unfulfilled orders sorted by fraud probability (highest risk first).
       </p>
 
       {loading ? (
         <p className="text-slate-500">Loading...</p>
       ) : rows.length === 0 ? (
-        <p className="text-slate-500">No fraud predictions found. Run scoring to generate predictions.</p>
+        <p className="text-slate-500">No fraud predictions found. Click &quot;Run Scoring&quot; to generate predictions.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm border border-slate-200">
@@ -90,12 +112,13 @@ export default function FraudQueuePage() {
                 <th className="px-3 py-2 text-left">Country</th>
                 <th className="px-3 py-2 text-right">Total</th>
                 <th className="px-3 py-2 text-right">Fraud Prob</th>
+                <th className="px-3 py-2 text-center">Predicted</th>
                 <th className="px-3 py-2 text-left">Scored At</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.order_id} className="border-t border-slate-100">
+                <tr key={r.order_id} className={`border-t border-slate-100 ${riskColor(r.fraud_probability)}`}>
                   <td className="px-3 py-2">{r.order_id}</td>
                   <td className="px-3 py-2">{new Date(r.order_datetime).toLocaleDateString()}</td>
                   <td className="px-3 py-2">{r.customer_name}</td>
@@ -103,8 +126,17 @@ export default function FraudQueuePage() {
                   <td className="px-3 py-2">{r.payment_method}</td>
                   <td className="px-3 py-2">{r.ip_country}</td>
                   <td className="px-3 py-2 text-right">${Number(r.order_total).toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-red-600">
-                    {(r.fraud_probability * 100).toFixed(1)}%
+                  <td className="px-3 py-2 text-right">
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${riskBadge(r.fraud_probability)}`}>
+                      {(r.fraud_probability * 100).toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {r.predicted_fraud ? (
+                      <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-0.5 rounded">Yes</span>
+                    ) : (
+                      <span className="bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded">No</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-500">
                     {new Date(r.prediction_timestamp).toLocaleString()}
