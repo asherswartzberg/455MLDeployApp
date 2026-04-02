@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
       billing_zip: "00000",
       shipping_zip: "00000",
       promo_used: 0,
+      risk_score: 0,
       is_fraud: 0,
       fulfilled: 0,
     })
